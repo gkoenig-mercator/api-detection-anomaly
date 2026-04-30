@@ -1,4 +1,6 @@
 # main.py
+import asyncio
+from fastapi import Request
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from datetime import datetime, timedelta
@@ -18,6 +20,15 @@ app = FastAPI(
     description="Detect threshold anomalies in ocean forecast data",
     version="1.0.0",
 )
+
+TIMEOUT_SECONDS = 60  # adjust depending on how long your fetch usually takes
+
+@app.middleware("http")
+async def timeout_middleware(request: Request, call_next):
+    try:
+        return await asyncio.wait_for(call_next(request), timeout=TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        return JSONResponse({"detail": "Request timed out on server side"}, status_code=504)
 
 
 @app.get("/health")
@@ -91,4 +102,4 @@ async def detect_anomalies_endpoint(request: AnomalyRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8002, reload=True)
