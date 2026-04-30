@@ -8,7 +8,7 @@ import logging
 
 from models import AnomalyRequest, AnomalyResponse
 from copernicus_client import fetch_forecast_data
-from anomaly_detector import detect_anomalies
+from anomaly_detector import detect_anomalies, build_geojson  # FIXED: added detect_anomalies
 from config import settings
 
 # Setup logging
@@ -21,7 +21,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
-TIMEOUT_SECONDS = 60  # adjust depending on how long your fetch usually takes
+TIMEOUT_SECONDS = 60
 
 @app.middleware("http")
 async def timeout_middleware(request: Request, call_next):
@@ -62,15 +62,18 @@ async def detect_anomalies_endpoint(request: AnomalyRequest):
             depth=depth,
         )
 
-        # 2. Detect anomalies
-        anomalies = detect_anomalies(
+        # 2. Detect anomalies — returns list[AnomalyPoint]
+        anomaly_points = detect_anomalies(
             dataset=dataset,
             variable=request.variable,
             threshold=request.threshold,
             operator=request.operator,
         )
 
-        # 3. Build response
+        # 3. Build GeoJSON from anomaly points
+        geojson = build_geojson(anomaly_points=anomaly_points)
+
+        # 4. Build response
         now = datetime.utcnow()
         response = AnomalyResponse(
             variable=request.variable,
@@ -81,8 +84,9 @@ async def detect_anomalies_endpoint(request: AnomalyRequest):
                 "start": now.isoformat(),
                 "end": (now + timedelta(days=settings.FORECAST_DAYS)).isoformat(),
             },
-            total_anomalies=len(anomalies),
-            anomalies=anomalies,
+            total_anomalies=len(anomaly_points),        # FIXED: count raw points
+            num_clusters=len(geojson["features"]),       # FIXED: count clusters
+            anomalies=geojson,                           # FIXED: GeoJSON dict not raw list
             metadata={
                 "dataset_id": settings.DATASET_CONFIG[request.variable]["dataset_id"],
                 "bbox": {

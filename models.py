@@ -60,5 +60,6 @@ class AnomalyResponse(BaseModel):
     operator: str
     forecast_range: dict
     total_anomalies: int
-    anomalies: list[AnomalyPoint]
+    num_clusters: int        # new: number of geographic clusters
+    anomalies: dict          # changed: now a GeoJSON FeatureCollection
     metadata: dict
